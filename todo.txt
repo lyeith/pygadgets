@@ -1,0 +1,3 @@
+Generator Versions of basic functions to make nice pipelines
+
+Async version of multiprocess list
