@@ -14,16 +14,21 @@ from pyspark import SparkContext, SparkConf
 from pyspark.sql import SparkSession
 
 
-def connect_spark(app_name='David_Spark', master='10.80.88.241:7077', lib_path='/Data_Science/Ignite/libs'):
-    arg = []
-    for name in os.listdir(lib_path):
-        if name.endswith('.jar'):
-            if arg:
-                arg.append(',')
-            arg.append(f'{lib_path}/{name}')
-    arg = ''.join(arg)
+def connect_spark(app_name='Spark_App', master=None, lib_path=None):
 
-    conf = SparkConf().setAppName(app_name).setMaster(f'spark://{master}').set('spark.jars', arg)
+    if lib_path:
+        arg = []
+        for name in os.listdir(lib_path):
+            if name.endswith('.jar'):
+                if arg:
+                    arg.append(',')
+                arg.append(f'{lib_path}/{name}')
+        arg = ''.join(arg)
+
+        conf = SparkConf().setAppName(app_name).setMaster(f'spark://{master}').set('spark.jars', arg)
+    else:
+        conf = SparkConf().setAppName(app_name).setMaster(f'spark://{master}')
+
     sc = SparkContext(conf=conf)
     ss = SparkSession(sc)
 
