@@ -40,7 +40,7 @@ def connect_mysql(conf, timezone=None, autocommit=True, timeout=30):
     conv = pymysql.converters.conversions.copy()
     conv[246] = float
 
-    conn_m = pymysql.connect(**conf.mysql_cashloan, conv=conv, read_timeout=timeout, autocommit=autocommit)
+    conn_m = pymysql.connect(**conf, conv=conv, read_timeout=timeout, autocommit=autocommit)
     exec_sql(conn_m, 'SET @@session.time_zone = \'+07:00\'', fetch=False)
 
     res = exec_sql(conn_m, 'SELECT NOW()')
@@ -54,7 +54,7 @@ def connect_mysql(conf, timezone=None, autocommit=True, timeout=30):
 
 def connect_postgres(conf, timezone=None, readonly=True, autocommit=True, timeout=15):
 
-    conn_pa = psycopg2.connect(**conf.pg_atmdb, connect_timeout=timeout)
+    conn_pa = psycopg2.connect(**conf, connect_timeout=timeout)
 
     conn_pa.set_session(readonly=readonly, autocommit=autocommit)
     exec_sql(conn_pa, 'SET TIMEZONE TO \'Asia/Jakarta\'', fetch=False)
@@ -70,9 +70,11 @@ def connect_postgres(conf, timezone=None, readonly=True, autocommit=True, timeou
 
 def exec_sql(conn, query, param=None, fetch=True):
 
-    if type(conn) == pymysql.connections.Connection:
+    if type(conn) in (pymysql.connections.Connection,
+                      newrelic.hooks.database_mysqldb.ConnectionWrapper):
         cur = conn.cursor(pymysql.cursors.DictCursor)
-    elif type(conn) == psycopg2.extensions.connection:
+    elif type(conn) in (psycopg2.extensions.connection,
+                        newrelic.hooks.database_psycopg2.ConnectionWrapper):
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     else:
         cur = conn.cursor()
@@ -94,9 +96,11 @@ def exec_sql_transaction(conn, query_lst, param_lst=None):
 
     conn.begin()
 
-    if type(conn) == pymysql.connections.Connection:
+    if type(conn) in (pymysql.connections.Connection,
+                      newrelic.hooks.database_mysqldb.ConnectionWrapper):
         cur = conn.cursor(pymysql.cursors.DictCursor)
-    elif type(conn) == psycopg2.extensions.connection:
+    elif type(conn) in (psycopg2.extensions.connection,
+                        newrelic.hooks.database_psycopg2.ConnectionWrapper):
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     else:
         cur = conn.cursor()
