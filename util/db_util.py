@@ -2,11 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Created on Jul 10 15:47:08 2019
-
 @author: david
 """
-import newrelic.hooks.database_mysqldb
-import newrelic.hooks.database_psycopg2
 import pymongo
 import pymysql
 import psycopg2
@@ -24,7 +21,7 @@ def connect_mongodb(conf, timezone=None, server_timeout=10, socket_timeout=90):
     '''
 
     client_c = pymongo.MongoClient('mongodb://{username}:{password}@{host}/{database}'.format(
-        **conf.mongodb_cashloan), serverSelectionTimeoutMS=server_timeout * 1000, socketTimeoutMS=socket_timeout * 1000)
+        **conf), serverSelectionTimeoutMS=server_timeout * 1000, socketTimeoutMS=socket_timeout * 1000)
 
     res = client_c.admin.command('ismaster')
     db_time = res['localTime'].replace(tzinfo=datetime.timezone.utc)
@@ -35,12 +32,11 @@ def connect_mongodb(conf, timezone=None, server_timeout=10, socket_timeout=90):
     return client_c, db_time
 
 
-def connect_mysql(conf, timezone=None, autocommit=True, timeout=30):
-
+def connect_mysql(conf, ssl=None, timezone=None, autocommit=True, timeout=30):
     conv = pymysql.converters.conversions.copy()
     conv[246] = float
 
-    conn_m = pymysql.connect(**conf.mysql_cashloan, conv=conv, read_timeout=timeout, autocommit=autocommit)
+    conn_m = pymysql.connect(**conf, ssl=ssl, conv=conv, read_timeout=timeout, autocommit=autocommit)
     exec_sql(conn_m, 'SET @@session.time_zone = \'+07:00\'', fetch=False)
 
     res = exec_sql(conn_m, 'SELECT NOW()')
@@ -53,8 +49,7 @@ def connect_mysql(conf, timezone=None, autocommit=True, timeout=30):
 
 
 def connect_postgres(conf, timezone=None, readonly=True, autocommit=True, timeout=15):
-
-    conn_pa = psycopg2.connect(**conf.pg_atmdb, connect_timeout=timeout)
+    conn_pa = psycopg2.connect(**conf, connect_timeout=timeout)
 
     conn_pa.set_session(readonly=readonly, autocommit=autocommit)
     exec_sql(conn_pa, 'SET TIMEZONE TO \'Asia/Jakarta\'', fetch=False)
@@ -68,10 +63,9 @@ def connect_postgres(conf, timezone=None, readonly=True, autocommit=True, timeou
     return conn_pa, db_time
 
 
-def exec_sql(conn, query, param=None, fetch=True):
-
+def exec_sql(conn, query, param=None, fetch=True, page=False):
     if type(conn) == pymysql.connections.Connection:
-        cur = conn.cursor(pymysql.cursors.DictCursor)
+        cur = conn.cursor(pymysql.cursors.SSDictCursor) if page else conn.cursor(pymysql.cursors.DictCursor)
     elif type(conn) == psycopg2.extensions.connection:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     else:
@@ -82,16 +76,20 @@ def exec_sql(conn, query, param=None, fetch=True):
     else:
         cur.execute(query)
 
-    res = cur.fetchall() if fetch else []
-    res = res if res else []
-
-    cur.close()
+    if fetch and page:
+        if type(conn) == pymysql.connections.Connection:
+            res = cur.fetchall_unbuffered()
+        else:
+            res = iter(cur.fetchone, None)
+    else:
+        res = cur.fetchall() if fetch else []
+        res = res if res else []
+        cur.close()
 
     return res
 
 
 def exec_sql_transaction(conn, query_lst, param_lst=None):
-
     conn.begin()
 
     if type(conn) == pymysql.connections.Connection:
@@ -115,23 +113,21 @@ def exec_sql_transaction(conn, query_lst, param_lst=None):
 
 
 def pg_insert_many_sql(conn, query, params):
-
     cur = conn.cursor()
     psycopg2.extras.execute_batch(cur, query, params)
     conn.commit()
 
 
 def upsert_postgres_query(table, constraint, keys, variables):
-
     sql = list()
     sql.append('INSERT INTO %s AS a(' % table)
     sql.append(', '.join(keys + variables))
     sql.append(') VALUES (')
-    sql.append(', '.join(['%({})s '.format(x, x) for x in (keys+ variables)]))
-    sql.append(') ON CONFLICT ON CONSTRAINT %s DO UPDATE SET '%constraint)
-    sql.append(', '.join(['{} = %({})s '.format(x,x) for x in variables]))
+    sql.append(', '.join(['%({})s '.format(x, x) for x in (keys + variables)]))
+    sql.append(') ON CONFLICT ON CONSTRAINT %s DO UPDATE SET ' % constraint)
+    sql.append(', '.join(['{} = %({})s '.format(x, x) for x in variables]))
     sql.append('WHERE ')
-    sql.append('AND '.join(['a.{} = %({})s '.format(x,x) for x in keys]))
+    sql.append('AND '.join(['a.{} = %({})s '.format(x, x) for x in keys]))
     sql.append(';')
 
     return ''.join(sql)
