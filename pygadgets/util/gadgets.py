@@ -12,7 +12,7 @@ import dateutil.parser
 import simplejson as json
 import time
 
-from ds_common.util import kafka_util
+from . import kafka_util
 from flask.json import JSONEncoder
 from functools import wraps
 

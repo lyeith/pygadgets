@@ -11,7 +11,7 @@ import os
 import sys
 import traceback
 
-from util import db_util, email_util, gadgets
+from pygadgets.util import gadgets, email_util, db_util
 from flask import jsonify
 from functools import partial
 

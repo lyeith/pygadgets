@@ -63,11 +63,14 @@ def connect_postgres(conf, timezone=None, readonly=True, autocommit=True, timeou
     return conn_pa, db_time
 
 
-def exec_sql(conn, query, param=None, fetch=True, page=False):
-    if type(conn) == pymysql.connections.Connection:
+def exec_sql(conn, query, param=None, dct=True, fetch=True, page=False):
+    if type(conn) == pymysql.connections.Connection and dct:
         cur = conn.cursor(pymysql.cursors.SSDictCursor) if page else conn.cursor(pymysql.cursors.DictCursor)
-    elif type(conn) == psycopg2.extensions.connection:
+    elif type(conn) == psycopg2.extensions.connection and dct:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    elif type(conn) == sqlite3.Connection and dct:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
     else:
         cur = conn.cursor()
 
